@@ -77,13 +77,24 @@ export default function ProfileTracking() {
                       <h3 className="text-xl font-bold text-white group-hover:text-red-500 transition-colors">
                         {claim.data.case_metadata.respondent_company}
                       </h3>
-                      <p className="text-sm text-neutral-400 mt-1">{claim.data.case_metadata.category}</p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-bold uppercase tracking-wider border ${
+                          claim.status === 'fired' 
+                            ? 'bg-green-950/50 text-green-500 border-green-900/50' 
+                            : 'bg-yellow-950/50 text-yellow-500 border-yellow-900/50'
+                        }`}>
+                          {claim.status === 'fired' ? 'Fired' : 'Drafted'}
+                        </span>
+                        <p className="text-sm text-neutral-400">{claim.data.case_metadata.category}</p>
+                      </div>
                     </div>
-                    <span className="px-3 py-1 bg-red-950 text-red-500 rounded-full text-xs font-bold uppercase tracking-wider border border-red-900/50">
-                      ₹{claim.data.case_metadata.estimated_claim_value_inr}
-                    </span>
+                    <div className="flex flex-col items-end">
+                      <span className="px-3 py-1 bg-red-950 text-red-500 rounded-full text-xs font-bold uppercase tracking-wider border border-red-900/50">
+                        ₹{claim.data.case_metadata.estimated_claim_value_inr}
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-sm text-neutral-300 line-clamp-2">
+                  <p className="text-sm text-neutral-300 line-clamp-2 mt-4">
                     {claim.data.user_summary.tl_dr}
                   </p>
                 </div>
