@@ -48,17 +48,21 @@ export async function POST(req: NextRequest) {
           Evidence attached: ${imageFile ? 'Yes' : 'No'}
           
           Perform the following:
-          1. Identify the Respondent Entity (Company) and the specific Deficiency in Service or Unfair Trade Practice.
-          2. Quantify the exact financial claim (Refund + Compensation for mental agony).
-          3. Draft a ruthless but professional 'Notice of Deficiency' email targeting the company's Nodal Grievance Officer (Keep the body under 200 words).
-          4. Draft a concise 280-character Twitter/X post tagging the company handle.
-          5. Output STRICTLY in the following JSON format and nothing else. Keep the tl_dr under 2 sentences.
+          1. Identify the Respondent Entity (Company) and strictly categorize the sector (e.g., Airlines, E-Commerce, Real Estate, Banking, etc.).
+          2. Cross-check the provided text (and attached evidence image if provided) to verify the genuinity of the claim.
+          3. Quantify the exact financial claim (Refund + Compensation for mental agony).
+          4. Draft a ruthless but professional 'Notice of Deficiency' email targeting the company's Nodal Grievance Officer (Keep the body under 200 words).
+          5. Draft a concise 280-character Twitter/X post tagging the company handle.
+          6. Output STRICTLY in the following JSON format and nothing else. Keep the tl_dr under 2 sentences.
           {
             "case_metadata": {
               "respondent_company": "string",
               "category": "string",
               "statutory_violation": "string",
-              "estimated_claim_value_inr": 0
+              "applicable_acts": ["string"],
+              "estimated_claim_value_inr": 0,
+              "probability_of_success_percent": 0,
+              "verification_analysis": "string"
             },
             "escalation_assets": {
               "nodal_officer_email": {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Mic, Camera, Send, Loader2, Type } from "lucide-react";
+import { Mic, Camera, Send, Loader2, Type, ShieldCheck, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import KYCModal from "@/components/KYCModal";
 
 export default function VentScreen() {
   const [isRecording, setIsRecording] = useState(false);
@@ -14,7 +15,7 @@ export default function VentScreen() {
   const [inputMode, setInputMode] = useState<"voice" | "text">("voice");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, kycStatus } = useAuth();
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -102,9 +103,10 @@ export default function VentScreen() {
       setIsProcessing(false);
     }
   };
-
   return (
     <main className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-6 relative">
+      <KYCModal />
+      
       {/* User Profile Header */}
       {user && (
         <div className="absolute top-6 right-6 flex items-center gap-4 z-50">
@@ -114,9 +116,20 @@ export default function VentScreen() {
           >
             HISTORY
           </button>
-          <div className="flex items-center gap-3 bg-neutral-900 border border-neutral-800 rounded-full pl-2 pr-4 py-1.5">
+          <div className="flex items-center gap-3 bg-neutral-900 border border-neutral-800 rounded-full pl-2 pr-4 py-1.5 shadow-lg">
             <img src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || 'User'}`} alt="Profile" className="w-8 h-8 rounded-full border border-neutral-700" />
-            <span className="text-sm font-medium text-neutral-300">{user.displayName || user.email}</span>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-neutral-300 leading-tight">{user.displayName || user.email}</span>
+              {kycStatus === 'verified' ? (
+                <span className="text-[10px] text-green-500 font-bold flex items-center gap-1 uppercase tracking-wider mt-0.5">
+                  <ShieldCheck className="w-3 h-3"/> Verified
+                </span>
+              ) : (
+                <span className="text-[10px] text-neutral-500 font-bold flex items-center gap-1 uppercase tracking-wider mt-0.5">
+                  <ShieldAlert className="w-3 h-3"/> Unverified
+                </span>
+              )}
+            </div>
           </div>
           <button 
             onClick={logout}
@@ -199,10 +212,15 @@ export default function VentScreen() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isProcessing}
-              className="flex items-center justify-center w-14 h-14 rounded-full bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors border border-neutral-700"
+              className="flex items-center justify-center w-14 h-14 rounded-full bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors border border-neutral-700 relative group"
               title="Upload Evidence Image"
             >
               <Camera className="w-6 h-6" />
+              {!imageFile && (
+                <span className="absolute -top-10 bg-neutral-800 text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                  Attach Evidence
+                </span>
+              )}
             </button>
 
             {(audioBlob || textComplaint.trim()) && (
@@ -214,7 +232,7 @@ export default function VentScreen() {
                 {isProcessing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Analyzing...</span>
+                    <span>{imageFile ? "Cross-checking Evidence..." : "Analyzing claim..."}</span>
                   </>
                 ) : (
                   <>
@@ -229,11 +247,11 @@ export default function VentScreen() {
           {/* Uploaded Evidence Indicators */}
           {imageFile && (
             <div className="bg-neutral-800 border border-neutral-700 px-4 py-2 rounded-lg text-sm text-neutral-300 flex items-center gap-2">
-              <Camera className="w-4 h-4" />
-              <span className="truncate max-w-[150px]">{imageFile.name}</span>
+              <Camera className="w-4 h-4 text-green-500" />
+              <span className="truncate max-w-[200px]">Evidence: {imageFile.name}</span>
               <button 
                 onClick={() => setImageFile(null)}
-                className="text-neutral-500 hover:text-white ml-2"
+                className="text-neutral-500 hover:text-red-500 ml-2 font-bold"
               >
                 &times;
               </button>

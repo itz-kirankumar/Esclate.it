@@ -13,7 +13,10 @@ type ClaimData = {
     respondent_company: string;
     category: string;
     statutory_violation: string;
+    applicable_acts?: string[];
     estimated_claim_value_inr: number;
+    probability_of_success_percent?: number;
+    verification_analysis?: string;
   };
   escalation_assets: {
     nodal_officer_email: {
@@ -168,9 +171,20 @@ export default function ClaimReview() {
               <h3 className="text-red-500 font-bold uppercase tracking-wider text-sm mb-1">Targeting</h3>
               <p className="text-3xl text-white font-black tracking-tight">{data.case_metadata.respondent_company}</p>
             </div>
-            <div className="flex items-center gap-2 bg-red-900/20 border border-red-900/30 px-4 py-2 rounded-lg inline-flex">
-              <Scale className="w-4 h-4 text-red-400" />
-              <span className="text-sm font-medium text-red-200">{data.case_metadata.statutory_violation}</span>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 bg-red-900/20 border border-red-900/30 px-4 py-2 rounded-lg inline-flex w-fit">
+                <Scale className="w-4 h-4 text-red-400" />
+                <span className="text-sm font-medium text-red-200">{data.case_metadata.statutory_violation}</span>
+              </div>
+              {data.case_metadata.applicable_acts && data.case_metadata.applicable_acts.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {data.case_metadata.applicable_acts.map((act, idx) => (
+                    <span key={idx} className="text-xs font-bold bg-neutral-900 border border-neutral-700 text-neutral-400 px-3 py-1 rounded-full">
+                      {act}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           
@@ -179,6 +193,47 @@ export default function ClaimReview() {
             <p className="text-5xl text-white font-extrabold">₹{data.case_metadata.estimated_claim_value_inr}</p>
           </div>
         </div>
+
+        {/* AI Verification & Probability */}
+        {data.case_metadata.verification_analysis && (
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-8 relative overflow-hidden">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              AI Evidence Verification
+            </h3>
+            
+            <div className="grid md:grid-cols-3 gap-8 items-center">
+              <div className="md:col-span-2 space-y-4">
+                <p className="text-neutral-300 leading-relaxed">
+                  {data.case_metadata.verification_analysis}
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-neutral-500 font-bold uppercase tracking-wider">Assigned Category:</span>
+                  <span className="px-3 py-1 bg-neutral-950 border border-neutral-800 rounded-full text-xs font-bold text-neutral-300">
+                    {data.case_metadata.category}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="bg-neutral-950 p-6 rounded-2xl border border-neutral-800 text-center flex flex-col items-center justify-center">
+                <h4 className="text-sm font-bold text-neutral-500 uppercase tracking-wider mb-2">Probability of Success</h4>
+                <div className="text-4xl font-black text-white mb-4">
+                  {data.case_metadata.probability_of_success_percent}%
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-2 bg-neutral-800 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full ${
+                      (data.case_metadata.probability_of_success_percent || 0) > 75 ? 'bg-green-500' : 
+                      (data.case_metadata.probability_of_success_percent || 0) > 40 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${data.case_metadata.probability_of_success_percent || 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Generated Assets Grid */}
         <div className="grid md:grid-cols-2 gap-8">
@@ -229,29 +284,47 @@ export default function ClaimReview() {
         {/* Action Area */}
         <div className="flex flex-col items-center justify-center py-12">
           {!dispatched ? (
-            <div className="flex flex-col items-center space-y-4">
-              <button
-                onClick={handleEscalate}
-                disabled={isFiring}
-                className={`
-                  relative px-16 py-6 rounded-full text-2xl font-black text-white
-                  overflow-hidden transition-all duration-300 shadow-[0_0_40px_rgba(220,38,38,0.3)] hover:shadow-[0_0_60px_rgba(220,38,38,0.5)] hover:scale-105 active:scale-95
-                  ${isFiring ? 'bg-red-800' : 'bg-red-600 hover:bg-red-500'}
-                `}
-              >
-                {isFiring && <div className="absolute inset-0 bg-red-400 animate-pulse mix-blend-overlay" />}
-                <span className="relative z-10 flex items-center gap-3">
-                  {isFiring ? 'FIRING WEBHOOKS...' : 'ESCALATE.IT'}
-                  {!isFiring && <ExternalLink className="w-6 h-6" />}
-                </span>
-              </button>
-              <p className="text-neutral-500 text-sm font-medium">Clicking this will dispatch the notices and mark the claim as fired in your history.</p>
+            <div className="flex flex-col items-center space-y-6">
+              <div className="flex flex-col md:flex-row items-center gap-6">
+                <button
+                  onClick={handleEscalate}
+                  disabled={isFiring}
+                  className={`
+                    relative px-12 py-5 rounded-full text-xl font-black text-white
+                    overflow-hidden transition-all duration-300 shadow-[0_0_40px_rgba(220,38,38,0.3)] hover:shadow-[0_0_60px_rgba(220,38,38,0.5)] hover:scale-105 active:scale-95
+                    ${isFiring ? 'bg-red-800' : 'bg-red-600 hover:bg-red-500'}
+                  `}
+                >
+                  {isFiring && <div className="absolute inset-0 bg-red-400 animate-pulse mix-blend-overlay" />}
+                  <span className="relative z-10 flex items-center gap-3">
+                    {isFiring ? 'FIRING WEBHOOKS...' : 'ESCALATE.IT'}
+                    {!isFiring && <ExternalLink className="w-5 h-5" />}
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleEscalate}
+                  disabled={isFiring}
+                  className={`
+                    px-8 py-5 rounded-full text-lg font-bold text-neutral-300
+                    border border-neutral-700 bg-neutral-900 hover:bg-neutral-800
+                    transition-all duration-300 hover:scale-105 active:scale-95
+                    flex items-center gap-3 disabled:opacity-50
+                  `}
+                >
+                  File on e-Daakhil (NCH)
+                  <Scale className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-neutral-500 text-sm font-medium max-w-lg text-center">
+                Clicking "ESCALATE.IT" dispatches automated notices. Clicking "File on e-Daakhil" routes this claim to the National Consumer Helpline (Gov. of India).
+              </p>
             </div>
           ) : (
             <div className="flex flex-col items-center text-green-500 animate-in fade-in zoom-in duration-500 bg-green-950/20 p-8 rounded-3xl border border-green-900/30">
               <CheckCircle2 className="w-20 h-20 mb-4 drop-shadow-[0_0_15px_rgba(34,197,94,0.5)]" />
               <h2 className="text-3xl font-black text-white tracking-tight">Shots Fired.</h2>
-              <p className="text-neutral-400 mt-2 text-lg">Notice sent. Tweet live. The clock is ticking.</p>
+              <p className="text-neutral-400 mt-2 text-lg">Notice sent. Tweet live. Officially filed.</p>
             </div>
           )}
         </div>
