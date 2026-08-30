@@ -1,125 +1,143 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
-// import { db, storage } from "@/lib/firebase/config"; // Uncomment when Firebase is configured
-// import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-// import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import OpenAI from "openai";
+import { AI_CONFIG } from "@/lib/ai/config";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
 
-// Initialize Gemini
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-const SYSTEM_PROMPT = `You are the Chief Legal AI for Escalate.it. You are aggressive on behalf of the consumer, yet strictly professional and compliant with the Consumer Protection Act, 2019. You analyze multimodal inputs (frustrated user audio and image evidence) to generate legally binding escalation documents.`;
+// Initialize OpenAI
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const audioFile = formData.get("audio") as File | null;
+    const textComplaint = formData.get("textComplaint") as string | null;
     const imageFile = formData.get("image") as File | null;
 
-    if (!audioFile) {
-      return NextResponse.json({ error: "Audio is required" }, { status: 400 });
+    if (!audioFile && !textComplaint) {
+      return NextResponse.json({ error: "Either audio or text complaint is required" }, { status: 400 });
     }
 
-    // 1. Convert files to formats Gemini accepts (Base64)
-    const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
-    const audioBase64 = audioBuffer.toString("base64");
-    
-    let imagePart = null;
+    let transcriptText = "";
+
+    if (audioFile) {
+      console.log("Transcribing audio with Whisper...");
+      // 1. Transcribe the audio using Whisper
+      const transcription = await openai.audio.transcriptions.create({
+        file: audioFile,
+        model: AI_CONFIG.openai.transcriptionModel,
+      });
+      transcriptText = transcription.text;
+      console.log("Transcript:", transcriptText);
+    } else if (textComplaint) {
+      transcriptText = textComplaint;
+    }
+
+    // 2. Prepare content for GPT-4o
+    const userMessages: any[] = [
+      {
+        type: "text",
+        text: `
+          Analyze the following user grievance context:
+          Location: Unknown, India (Extract from context if available)
+          User Complaint / Transcript: "${transcriptText}"
+          Evidence attached: ${imageFile ? 'Yes' : 'No'}
+          
+          Perform the following:
+          1. Identify the Respondent Entity (Company) and the specific Deficiency in Service or Unfair Trade Practice.
+          2. Quantify the exact financial claim (Refund + Compensation for mental agony).
+          3. Draft a ruthless but professional 'Notice of Deficiency' email targeting the company's Nodal Grievance Officer (Keep the body under 200 words).
+          4. Draft a concise 280-character Twitter/X post tagging the company handle.
+          5. Output STRICTLY in the following JSON format and nothing else. Keep the tl_dr under 2 sentences.
+          {
+            "case_metadata": {
+              "respondent_company": "string",
+              "category": "string",
+              "statutory_violation": "string",
+              "estimated_claim_value_inr": 0
+            },
+            "escalation_assets": {
+              "nodal_officer_email": {
+                "subject_line": "string",
+                "body": "string",
+                "cc_authorities": ["string"]
+              },
+              "social_media_draft": {
+                "platform": "string",
+                "content": "string",
+                "suggested_hashtags": ["string"]
+              }
+            },
+            "user_summary": {
+              "tl_dr": "string"
+            }
+          }
+        `,
+      }
+    ];
+
     if (imageFile) {
       const imageBuffer = Buffer.from(await imageFile.arrayBuffer());
-      imagePart = {
-        inlineData: {
-          data: imageBuffer.toString("base64"),
-          mimeType: imageFile.type,
+      const imageBase64 = imageBuffer.toString("base64");
+      userMessages.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${imageFile.type};base64,${imageBase64}`,
         },
-      };
+      });
     }
 
-    const audioPart = {
-      inlineData: {
-        data: audioBase64,
-        mimeType: audioFile.type || "audio/webm",
-      },
+    console.log("Calling OpenAI with cascading fallback...");
+    // 3. Call OpenAI API with Fallback Logic
+    const callOpenAI = async (modelName: string) => {
+      return await openai.chat.completions.create({
+        model: modelName,
+        messages: [
+          { role: "system", content: AI_CONFIG.systemPrompt },
+          { role: "user", content: userMessages }
+        ],
+        response_format: { type: "json_object" },
+      });
     };
 
-    const executionPrompt = `
-      Analyze the following user grievance context:
-      Location: Unknown, India (Extract from audio if available)
-      Evidence attached: ${imageFile ? 'Yes' : 'No'}
-      
-      Perform the following:
-      1. Identify the Respondent Entity (Company) and the specific Deficiency in Service or Unfair Trade Practice.
-      2. Quantify the exact financial claim (Refund + Compensation for mental agony).
-      3. Draft a ruthless but professional 'Notice of Deficiency' email targeting the company's Nodal Grievance Officer.
-      4. Draft a concise 280-character Twitter/X post tagging the company handle.
-      5. Output STRICTLY in the JSON schema provided below, with no markdown formatting or conversational text.
-    `;
+    let response;
+    const modelChain = [AI_CONFIG.openai.primaryModel, AI_CONFIG.openai.fallbackModel];
+    let lastError = null;
 
-    // 2. Call Gemini API
-    const contents: any[] = [audioPart, executionPrompt];
-    if (imagePart) contents.splice(1, 0, imagePart);
+    for (const model of modelChain) {
+      try {
+        response = await callOpenAI(model);
+        console.log(`Successfully generated content using model: ${model}`);
+        break; // Success! Break out of the fallback loop.
+      } catch (err: any) {
+        console.warn(`Model (${model}) failed: ${err.message}. Cascading to next fallback...`);
+        lastError = err;
+      }
+    }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-pro-latest",
-      contents: contents,
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: "OBJECT",
-          properties: {
-            case_metadata: {
-              type: "OBJECT",
-              properties: {
-                respondent_company: { type: "STRING" },
-                category: { type: "STRING" },
-                statutory_violation: { type: "STRING" },
-                estimated_claim_value_inr: { type: "NUMBER" },
-              },
-            },
-            escalation_assets: {
-              type: "OBJECT",
-              properties: {
-                nodal_officer_email: {
-                  type: "OBJECT",
-                  properties: {
-                    subject_line: { type: "STRING" },
-                    body: { type: "STRING" },
-                    cc_authorities: { type: "ARRAY", items: { type: "STRING" } },
-                  },
-                },
-                social_media_draft: {
-                  type: "OBJECT",
-                  properties: {
-                    platform: { type: "STRING" },
-                    content: { type: "STRING" },
-                    suggested_hashtags: { type: "ARRAY", items: { type: "STRING" } },
-                  },
-                },
-              },
-            },
-            user_summary: {
-              type: "OBJECT",
-              properties: {
-                tl_dr: { type: "STRING" },
-              },
-            },
-          },
-        },
-      },
-    });
+    if (!response || !response.choices[0].message.content) {
+      throw new Error(`All OpenAI models failed. Last error: ${lastError?.message}`);
+    }
 
-    const aiResult = JSON.parse(response.text || "{}");
+    const aiResult = JSON.parse(response.choices[0].message.content);
+    const userId = formData.get("userId") as string | null;
 
-    // 3. Save to Firebase (Mocked for now)
-    // const claimRef = await addDoc(collection(db, "claims"), {
-    //   ...aiResult,
-    //   status: "drafted",
-    //   createdAt: serverTimestamp(),
-    // });
-    // const claimId = claimRef.id;
-
-    // MOCK ID FOR NOW
-    const claimId = "mock-claim-" + Date.now();
+    // 4. Save to Firestore
+    let claimId = "mock-claim-" + Date.now();
+    try {
+      if (userId) {
+        const claimRef = await addDoc(collection(db, "claims"), {
+          userId,
+          status: "drafted",
+          createdAt: serverTimestamp(),
+          data: aiResult,
+        });
+        claimId = claimRef.id;
+        console.log("Claim successfully saved to Firestore:", claimId);
+      }
+    } catch (dbError) {
+      console.error("Failed to save claim to Firestore:", dbError);
+    }
 
     return NextResponse.json({ success: true, claimId, data: aiResult });
 
