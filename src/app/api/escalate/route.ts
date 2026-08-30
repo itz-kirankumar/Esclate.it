@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (imagePart) contents.splice(1, 0, imagePart);
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-pro",
+      model: "gemini-1.5-pro-latest",
       contents: contents,
       config: {
         systemInstruction: SYSTEM_PROMPT,
