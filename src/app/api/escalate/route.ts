@@ -4,6 +4,8 @@ import { AI_CONFIG } from "@/lib/ai/config";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
+export const dynamic = "force-dynamic";
+
 // Initialize OpenAI
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
