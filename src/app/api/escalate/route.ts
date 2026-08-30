@@ -6,8 +6,10 @@ import { db } from "@/lib/firebase/config";
 
 export const dynamic = "force-dynamic";
 
-// Initialize OpenAI
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Initialize OpenAI safely for Vercel build
+const openai = new OpenAI({ 
+  apiKey: process.env.OPENAI_API_KEY || "mock-key-for-build" 
+});
 
 export async function POST(req: NextRequest) {
   try {
